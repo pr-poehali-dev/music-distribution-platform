@@ -1,0 +1,34 @@
+{
+  "tests": [
+    {
+      "name": "Get platforms list",
+      "method": "GET",
+      "path": "/?action=platforms",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "platforms": "array"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Get user releases",
+      "method": "GET",
+      "path": "/?action=releases&user_id=1",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "releases": "array"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Get analytics data",
+      "method": "GET",
+      "path": "/?action=analytics&user_id=1",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "totals": "object"
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

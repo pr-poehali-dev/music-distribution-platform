@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -8,8 +8,90 @@ import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
 import Icon from '@/components/ui/icon';
 
+const API_URL = 'https://functions.poehali.dev/fa2d4abe-3237-4930-9e20-1b3195318c79';
+const USER_ID = 1;
+
 const Index = () => {
   const [activeSection, setActiveSection] = useState('home');
+  const [releases, setReleases] = useState([]);
+  const [analytics, setAnalytics] = useState(null);
+  const [earnings, setEarnings] = useState(null);
+  const [payouts, setPayouts] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (activeSection === 'catalog') {
+      fetchReleases();
+    } else if (activeSection === 'analytics') {
+      fetchAnalytics();
+    } else if (activeSection === 'dashboard') {
+      fetchEarnings();
+      fetchPayouts();
+    }
+  }, [activeSection]);
+
+  const fetchReleases = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_URL}?action=releases&user_id=${USER_ID}`);
+      const data = await response.json();
+      setReleases(data.releases || []);
+    } catch (error) {
+      console.error('Error fetching releases:', error);
+    }
+    setLoading(false);
+  };
+
+  const fetchAnalytics = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_URL}?action=analytics&user_id=${USER_ID}`);
+      const data = await response.json();
+      setAnalytics(data);
+    } catch (error) {
+      console.error('Error fetching analytics:', error);
+    }
+    setLoading(false);
+  };
+
+  const fetchEarnings = async () => {
+    try {
+      const response = await fetch(`${API_URL}?action=earnings&user_id=${USER_ID}`);
+      const data = await response.json();
+      setEarnings(data);
+    } catch (error) {
+      console.error('Error fetching earnings:', error);
+    }
+  };
+
+  const fetchPayouts = async () => {
+    try {
+      const response = await fetch(`${API_URL}?action=payouts&user_id=${USER_ID}`);
+      const data = await response.json();
+      setPayouts(data.payouts || []);
+    } catch (error) {
+      console.error('Error fetching payouts:', error);
+    }
+  };
+
+  const requestPayout = async (amount: number, method: string, details: string) => {
+    try {
+      const response = await fetch(`${API_URL}?action=payouts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: USER_ID, amount, method, details })
+      });
+      const data = await response.json();
+      if (data.id) {
+        fetchPayouts();
+        fetchEarnings();
+        alert('Запрос на выплату отправлен!');
+      }
+    } catch (error) {
+      console.error('Error requesting payout:', error);
+      alert('Ошибка при запросе выплаты');
+    }
+  };
 
   const navigation = [
     { id: 'home', label: 'Главная', icon: 'Home' },
@@ -210,31 +292,48 @@ const Index = () => {
               </Button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {[1, 2, 3, 4, 5, 6].map((i) => (
-                <Card key={i} className="overflow-hidden hover:shadow-lg transition-shadow">
-                  <div className="aspect-square bg-gradient-to-br from-primary/20 to-purple-500/20 flex items-center justify-center">
-                    <Icon name="Music" size={64} className="text-primary/50" />
-                  </div>
-                  <CardHeader>
-                    <CardTitle className="text-lg">Название трека {i}</CardTitle>
-                    <CardDescription>Артист • 2024</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Статус</span>
-                      <span className="text-green-500">Опубликован</span>
+            {loading ? (
+              <div className="text-center py-12">
+                <Icon name="Loader2" className="animate-spin mx-auto mb-4" size={48} />
+                <p className="text-muted-foreground">Загрузка релизов...</p>
+              </div>
+            ) : releases.length === 0 ? (
+              <Card className="p-12 text-center">
+                <Icon name="Music" size={64} className="mx-auto mb-4 text-muted-foreground" />
+                <p className="text-lg text-muted-foreground">У вас пока нет релизов</p>
+                <Button className="mt-4" onClick={() => setActiveSection('distribution')}>
+                  Загрузить первый трек
+                </Button>
+              </Card>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {releases.map((release: any) => (
+                  <Card key={release.id} className="overflow-hidden hover:shadow-lg transition-shadow">
+                    <div className="aspect-square bg-gradient-to-br from-primary/20 to-purple-500/20 flex items-center justify-center">
+                      <Icon name="Music" size={64} className="text-primary/50" />
                     </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Платформы</span>
-                      <span>12</span>
-                    </div>
-                    <Progress value={85} className="mt-2" />
-                    <p className="text-xs text-muted-foreground">85% обработано</p>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                    <CardHeader>
+                      <CardTitle className="text-lg">{release.title}</CardTitle>
+                      <CardDescription>{release.artist} • {new Date(release.created_at).getFullYear()}</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Статус</span>
+                        <span className={release.status === 'published' ? 'text-green-500' : 'text-yellow-500'}>
+                          {release.status === 'published' ? 'Опубликован' : release.status === 'moderation' ? 'Модерация' : 'Черновик'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Платформы</span>
+                        <span>{release.platforms_count}</span>
+                      </div>
+                      <Progress value={release.progress} className="mt-2" />
+                      <p className="text-xs text-muted-foreground">{release.progress}% обработано</p>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -242,117 +341,108 @@ const Index = () => {
           <div className="space-y-6 animate-fade-in">
             <h2 className="text-4xl font-bold">Аналитика</h2>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm text-muted-foreground">Прослушивания за неделю</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-4xl font-bold">84,329</p>
-                  <p className="text-sm text-green-500 mt-1">+15.3% к прошлой неделе</p>
-                </CardContent>
-              </Card>
+            {loading || !analytics ? (
+              <div className="text-center py-12">
+                <Icon name="Loader2" className="animate-spin mx-auto mb-4" size={48} />
+                <p className="text-muted-foreground">Загрузка аналитики...</p>
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-sm text-muted-foreground">Всего прослушиваний</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-4xl font-bold">{analytics.totals.streams.toLocaleString()}</p>
+                      <p className="text-sm text-green-500 mt-1">+15.3% к прошлой неделе</p>
+                    </CardContent>
+                  </Card>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm text-muted-foreground">Новые слушатели</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-4xl font-bold">12,847</p>
-                  <p className="text-sm text-green-500 mt-1">+8.7%</p>
-                </CardContent>
-              </Card>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-sm text-muted-foreground">Слушатели</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-4xl font-bold">{analytics.totals.listeners.toLocaleString()}</p>
+                      <p className="text-sm text-green-500 mt-1">+8.7%</p>
+                    </CardContent>
+                  </Card>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm text-muted-foreground">Доход за месяц</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-4xl font-bold">₽28,450</p>
-                  <p className="text-sm text-green-500 mt-1">+23.1%</p>
-                </CardContent>
-              </Card>
-            </div>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-sm text-muted-foreground">Общий доход</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-4xl font-bold">₽{analytics.totals.revenue.toLocaleString()}</p>
+                      <p className="text-sm text-green-500 mt-1">+23.1%</p>
+                    </CardContent>
+                  </Card>
+                </div>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Топ платформ по прослушиваниям</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {[
-                  { name: 'Spotify', streams: '42,389', percent: 85 },
-                  { name: 'Apple Music', streams: '28,194', percent: 65 },
-                  { name: 'Яндекс.Музыка', streams: '18,742', percent: 45 },
-                  { name: 'VK Музыка', streams: '12,394', percent: 30 },
-                  { name: 'YouTube Music', streams: '8,291', percent: 20 },
-                ].map((platform) => (
-                  <div key={platform.name} className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium">{platform.name}</span>
-                      <span className="text-muted-foreground">{platform.streams}</span>
-                    </div>
-                    <Progress value={platform.percent} />
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Топ платформ по прослушиваниям</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {analytics.platforms.map((platform: any) => {
+                      const maxStreams = Math.max(...analytics.platforms.map((p: any) => p.streams));
+                      const percent = (platform.streams / maxStreams) * 100;
+                      return (
+                        <div key={platform.name} className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium">{platform.name}</span>
+                            <span className="text-muted-foreground">{platform.streams.toLocaleString()}</span>
+                          </div>
+                          <Progress value={percent} />
+                        </div>
+                      );
+                    })}
+                  </CardContent>
+                </Card>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>География слушателей</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {[
-                    { country: 'Россия', percent: 62 },
-                    { country: 'Украина', percent: 18 },
-                    { country: 'Казахстан', percent: 12 },
-                    { country: 'Беларусь', percent: 8 },
-                  ].map((geo) => (
-                    <div key={geo.country} className="flex items-center justify-between">
-                      <span>{geo.country}</span>
-                      <span className="text-muted-foreground">{geo.percent}%</span>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>География слушателей</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {analytics.countries.map((geo: any) => {
+                        const total = analytics.countries.reduce((sum: number, c: any) => sum + c.streams, 0);
+                        const percent = ((geo.streams / total) * 100).toFixed(0);
+                        return (
+                          <div key={geo.country} className="flex items-center justify-between">
+                            <span>{geo.country}</span>
+                            <span className="text-muted-foreground">{percent}%</span>
+                          </div>
+                        );
+                      })}
+                    </CardContent>
+                  </Card>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>Демография</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>18-24</span>
-                      <span>32%</span>
-                    </div>
-                    <Progress value={32} />
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>25-34</span>
-                      <span>45%</span>
-                    </div>
-                    <Progress value={45} />
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>35-44</span>
-                      <span>18%</span>
-                    </div>
-                    <Progress value={18} />
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>45+</span>
-                      <span>5%</span>
-                    </div>
-                    <Progress value={5} />
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Демография</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {analytics.demographics.map((demo: any) => {
+                        const total = analytics.demographics.reduce((sum: number, d: any) => sum + d.streams, 0);
+                        const percent = ((demo.streams / total) * 100).toFixed(0);
+                        return (
+                          <div key={demo.age_group} className="space-y-2">
+                            <div className="flex justify-between text-sm">
+                              <span>{demo.age_group}</span>
+                              <span>{percent}%</span>
+                            </div>
+                            <Progress value={Number(percent)} />
+                          </div>
+                        );
+                      })}
+                    </CardContent>
+                  </Card>
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -514,32 +604,36 @@ const Index = () => {
               </TabsContent>
 
               <TabsContent value="earnings" className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-sm text-muted-foreground">Всего заработано</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-3xl font-bold">₽342,500</p>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-sm text-muted-foreground">За этот месяц</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-3xl font-bold">₽28,450</p>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-sm text-muted-foreground">Ожидает выплаты</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-3xl font-bold">₽15,200</p>
-                    </CardContent>
-                  </Card>
-                </div>
+                {earnings && (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-sm text-muted-foreground">Всего заработано</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <p className="text-3xl font-bold">₽{earnings.total_earnings.toLocaleString()}</p>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-sm text-muted-foreground">Выплачено</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <p className="text-3xl font-bold">₽{earnings.total_paid.toLocaleString()}</p>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-sm text-muted-foreground">Доступно к выводу</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <p className="text-3xl font-bold">₽{earnings.available.toLocaleString()}</p>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </>
+                )}
 
                 <Card>
                   <CardHeader>
@@ -567,18 +661,20 @@ const Index = () => {
               </TabsContent>
 
               <TabsContent value="payout" className="space-y-6">
-                <Card className="bg-gradient-to-r from-primary/10 to-purple-500/10 border-primary">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Icon name="Wallet" size={24} />
-                      Доступно для вывода
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-5xl font-bold">₽15,200</p>
-                    <p className="text-muted-foreground mt-2">Минимальная сумма вывода: ₽1,000</p>
-                  </CardContent>
-                </Card>
+                {earnings && (
+                  <Card className="bg-gradient-to-r from-primary/10 to-purple-500/10 border-primary">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Icon name="Wallet" size={24} />
+                        Доступно для вывода
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-5xl font-bold">₽{earnings.available.toLocaleString()}</p>
+                      <p className="text-muted-foreground mt-2">Минимальная сумма вывода: ₽1,000</p>
+                    </CardContent>
+                  </Card>
+                )}
 
                 <Card>
                   <CardHeader>
@@ -606,7 +702,18 @@ const Index = () => {
                       <Input id="details" placeholder="Номер карты или кошелька" />
                     </div>
 
-                    <Button className="w-full gap-2" size="lg">
+                    <Button 
+                      className="w-full gap-2" 
+                      size="lg"
+                      onClick={() => {
+                        const amount = (document.getElementById('amount') as HTMLInputElement).value;
+                        const method = (document.getElementById('method') as HTMLSelectElement).value;
+                        const details = (document.getElementById('details') as HTMLInputElement).value;
+                        if (amount && method && details) {
+                          requestPayout(Number(amount), method, details);
+                        }
+                      }}
+                    >
                       <Icon name="ArrowDownToLine" size={20} />
                       Запросить выплату
                     </Button>
@@ -618,24 +725,26 @@ const Index = () => {
                     <CardTitle>История выплат</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-4">
-                      {[
-                        { date: '15 ноября 2024', amount: '₽12,500', status: 'Выполнена', method: 'Банковская карта' },
-                        { date: '1 ноября 2024', amount: '₽18,200', status: 'Выполнена', method: 'ЮMoney' },
-                        { date: '15 октября 2024', amount: '₽15,800', status: 'Выполнена', method: 'Банковская карта' },
-                      ].map((payout, idx) => (
-                        <div key={idx} className="flex items-center justify-between py-3 border-b border-border last:border-0">
-                          <div>
-                            <p className="font-medium">{payout.date}</p>
-                            <p className="text-sm text-muted-foreground">{payout.method}</p>
+                    {payouts.length === 0 ? (
+                      <p className="text-center text-muted-foreground py-8">Выплат пока не было</p>
+                    ) : (
+                      <div className="space-y-4">
+                        {payouts.map((payout: any) => (
+                          <div key={payout.id} className="flex items-center justify-between py-3 border-b border-border last:border-0">
+                            <div>
+                              <p className="font-medium">{new Date(payout.requested_at).toLocaleDateString('ru-RU')}</p>
+                              <p className="text-sm text-muted-foreground">{payout.method}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-bold">₽{payout.amount.toLocaleString()}</p>
+                              <span className={`text-xs ${payout.status === 'completed' ? 'text-green-500' : 'text-yellow-500'}`}>
+                                {payout.status === 'completed' ? 'Выполнена' : 'В обработке'}
+                              </span>
+                            </div>
                           </div>
-                          <div className="text-right">
-                            <p className="font-bold">{payout.amount}</p>
-                            <span className="text-xs text-green-500">{payout.status}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </TabsContent>
